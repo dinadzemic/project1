@@ -19,15 +19,22 @@ tidy=TRUE, tidy.opts=list(width.cutoff=60), R.options=list(max.print=100))
 
 ## Data Wrangling, Exploration, Visualization
 
-### Name and EID here
+### Dina Dzemic dd32778
 
 #### Introduction 
 
-Paragraph or two introducing your datasets and variables, why they are interesting to you, etc.
+Before I started anything, I downloaded all the packages that I needed. The following datasets include information regarding episodes from the hit TV show, Friends. I only started watching the series recently, but I fell in love with it, so I thought picking it to analyze for my project would be fun. The first dataset includes the name of each episode, its season and episode number, its rating on IMDb, who it was directed by, who it was written by, the original air date, and US views in millions. The second dataset includes each line from the show, who it was spoken by, which episode and season its from, which scene of the episode its from, and the order in which it was spoken.
 
 ```{R}
-# read your datasets in here, e.g., with read_csv()
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(gt)
+library(ggplot2)
 
+friends1 <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-08/friends_info.csv')
+
+friends2 <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-08/friends.csv')
 ```
 
 #### Tidying: Reshaping
@@ -35,56 +42,127 @@ Paragraph or two introducing your datasets and variables, why they are interesti
 If your datasets are tidy already, demonstrate that you can reshape data with pivot wider/longer here (e.g., untidy and then retidy). Alternatively, it may be easier to wait until the wrangling section so you can reshape your summary statistics. Note here if you are going to do this.
 
 ```{R}
-# your tidying code (if applicable; can also wait until wrangling section)
+friends1 <- friends1 %>% pivot_wider(names_from="air_date",values_from="title")
+
+friends1 <- friends1 %>% pivot_longer(7:231, names_to="air_date", values_to="title") %>% na.omit %>% relocate(air_date, .before = us_views_millions) %>% relocate(title, .before=directed_by)
 ```
 
     
 #### Joining/Merging
 
 ```{R}
-# your joining code
-
-# your joining code
+friends <- full_join(friends1, friends2)
 ```
 
-Discussions of joining here. Feel encouraged to break up into more than once code chunk and discuss each in turn.
+The original friends1 dataset had 236 observations/rows of 8 distinct variables/IDs, and the original friends2 dataset had 67373 observations/rows of 6 distinct variables/IDs. The friends1 dataset contained the distinct variables/IDs title, directed_by, written_by, air_date, us_views_millions, and imdb_rating, which were not in friends2. The friends2 dataset contained the distinct variables/IDs text, speaker, scene, and utterance, which were not in friends1. Both datasets contained the variables/IDs season and episode. Once joined, the dataset had 67373 observations/rows of 12 distinct variables/IDs, and no observations were dropped. It matches the number of rows/observations that were in the friends2 dataset because all of the data was retained, and it contains 12 distinct rows/observations because it contains the 10 unique variables/IDs of each dataset (6 in friends1 and 4 in friends2) and the 2 variables/IDs (season and episode) that are present in both. I chose to do a full join by season and episode because I wanted to retain all of my original data. 
 
 ####  Wrangling
 
 ```{R}
-# your wrangling code
+friendss <- friends %>% select(season, episode, title, directed_by, written_by, air_date, us_views_millions, imdb_rating, text, speaker, scene)
+speak <- friendss %>% group_by(speaker) %>% summarize(times_spoken=(n())) %>% arrange(desc(times_spoken))
+main_cast <- friendss %>% filter(speaker=='Ross Geller'| speaker=='Monica Geller'|speaker=='Chandler Bing'| speaker=='Joey Tribbiani'|speaker=='Rachel Green'| speaker=='Phoebe Buffay')
+rating_percentages <- friendss %>% group_by(title) %>% mutate(rating_percentage=(imdb_rating/10)*100)
+friendss <- friendss %>% mutate(written_by = str_replace(written_by, "Teleplay", " Teleplay"))
+friendss <- friendss %>% mutate(directed_by = str_replace(directed_by, "Dana DeValley Piazza", "Dana DeVally Piazza"))
 
-# your wrangling code
+views_stats <- friendss %>% summarize(mean=(mean(us_views_millions)), std=(sd(us_views_millions)), vari=(var(us_views_millions)), min=(min(us_views_millions)), max=(max(us_views_millions)))
+views_stats %>% gt() %>% tab_header(title = md("Stat Summary of US Views (in millions)"))
+sum(is.na(views_stats))
+views_stats2 <- friendss %>% group_by(directed_by) %>% summarize(mean=(mean(us_views_millions)), std=(sd(us_views_millions)), vari=(var(us_views_millions)), min=(min(us_views_millions)), max=(max(us_views_millions)))
+views_stats2 %>% gt() %>% tab_header(title = md("Stat Summary of US Views (in millions) by Director"))
+sum(is.na(views_stats2))
+ratings_stats <- friendss %>% summarize(mean=(mean(imdb_rating)), std=(sd(imdb_rating)), vari=(var(imdb_rating)), min=(min(imdb_rating)), max=(max(imdb_rating)))
+ratings_stats %>% gt() %>% tab_header(title = md("Stat Summary of IMDb Ratings"))
+sum(is.na(ratings_stats))
+ratings_stats2 <- friendss %>% group_by(directed_by) %>% summarize(mean=(mean(imdb_rating)), std=(sd(imdb_rating)), vari=(var(imdb_rating)), min=(min(imdb_rating)), max=(max(imdb_rating)))
+views_stats2 %>% gt() %>% tab_header(title = md("Stat Summary of IMDb Ratings by Director"))
+sum(is.na(ratings_stats2))
 
-# your wrangling code
+seasons <- friendss %>% group_by(season) %>% summarize(n())
+seasons %>% gt() %>% tab_header(title = md("Frequency of Each Level of Seasons in the friendss Dataset"))
+seasons %>% summarize_all(function(x)sum(is.na(x)))
+seasons2 <- friendss %>% group_by(episode) %>% summarize(n_distinct(season))
+seasons %>% gt() %>% tab_header(title = md("Frequency of Distinct Seasons that Contain a Certain Episode Number"))
+seasons2 %>% summarize_all(function(x)sum(is.na(x)))
+episodes <- friendss %>% group_by(episode) %>% summarize(n())
+episodes %>% gt() %>% tab_header(title = md("Frequency of Each Level of Episodes in the friendss Dataset"))
+episodes %>% summarize_all(function(x)sum(is.na(x))) 
+episodes2 <- friendss %>% group_by(season) %>% summarize(episodes=(n_distinct(episode)))
+episodes2 %>% gt() %>% tab_header(title = md("Frequency of Distinct Episodes in Each Season"))
+episodes2 %>% summarize_all(function(x)sum(is.na(x)))
+directors <- friendss %>% group_by(directed_by) %>% summarize(n())
+directors %>% gt() %>% tab_header(title = md("Frequency of Each Level of Directors in the friendss Dataset"))
+directors %>% summarize_all(function(x)sum(is.na(x)))
+directors2 <- friendss %>% group_by(season) %>% summarize(n_distinct(directed_by))
+directors2 %>% gt() %>% tab_header(title = md("Frequency of Distinct Directors in Each Season"))
+directors2 %>% summarize_all(function(x)sum(is.na(x))) 
+writers <- friendss %>% group_by(written_by) %>% summarize(n())
+writers %>% gt() %>% tab_header(title = md("Frequency of Each Level of Writers in the friendss Dataset"))
+writers %>% summarize_all(function(x)sum(is.na(x))) 
+writers2 <- friendss %>% group_by(season) %>% summarize(n_distinct(written_by))
+writers2 %>% gt() %>% tab_header(title = md("Frequency of Distinct Writers in Each Season"))
+writers2 %>% summarize_all(function(x)sum(is.na(x)))
+aired <- friendss %>% group_by(air_date) %>% summarize(n())
+aired %>% gt() %>% tab_header(title = md("Frequency of Each Level of Air Dates in the friendss Dataset"))
+aired %>% summarize_all(function(x)sum(is.na(x)))
+aired2 <- friendss %>% group_by(season) %>% summarize(n_distinct(air_date))
+aired2 %>% gt() %>% tab_header(title = md("Frequency of Distinct Air Dates in Each Season"))
+aired2 %>% summarize_all(function(x)sum(is.na(x))) 
+title <- friendss %>% group_by(title) %>% summarize(n())
+title %>% gt() %>% tab_header(title = md("Frequency of Each Level of Title in the friendss Dataset"))
+title %>% summarize_all(function(x)sum(is.na(x)))
+title2 <- friendss %>% group_by(season) %>% summarize(n_distinct(title))
+title2 %>% gt() %>% tab_header(title = md("Frequency of Distinct Titles in Each Season"))
+title2 %>% summarize_all(function(x)sum(is.na(x)))
+scenes <- friendss %>% group_by(scene) %>% summarize(n())
+scenes %>% gt() %>% tab_header(title = md("Frequency of Each Level of Scenes in the friendss Dataset"))
+scenes %>% summarize_all(function(x)sum(is.na(x)))
+scenes2 <- friendss %>% group_by(season, episode) %>% summarize(scenes=(n_distinct(scene)))
+scenes2 %>% gt() %>% tab_header(title = md("Frequency of Distinct Scenes of Each Episode of Each Season"))
+scenes2 %>% summarize_all(function(x)sum(is.na(x)))
+speakers <- friendss %>% group_by(speaker) %>% summarize(n())
+seasons %>% gt() %>% tab_header(title = md("Frequency of Each Level of Speakers in the friendss Dataset"))
+speakers %>% summarize_all(function(x)sum(is.na(x)))
+speakers2 <- friendss %>% group_by(season) %>% summarize(n_distinct(speaker))
+speakers2 %>% gt() %>% tab_header(title = md("Number of Distinct Speakers in Each Season of *Friends*")) %>% tab_style(style = list(cell_fill(color = "tomato")), locations = cells_body(rows= c(1,4,7,10))) %>% tab_style(style = list(cell_fill(color = "lightblue1")), locations = cells_body(rows= c(2,5,8))) %>% tab_style(style = list(cell_fill(color = "khaki1")), locations = cells_body(rows= c(3,6,9)))
+speakers2 %>% summarize_all(function(x)sum(is.na(x)))
+texts <- friendss %>% group_by(text) %>% summarize(n())
+seasons %>% gt() %>% tab_header(title = md("Frequency of Each Level of Text in the friendss Dataset"))
+texts %>% summarize_all(function(x)sum(is.na(x)))
+texts2 <- friendss %>% group_by(season) %>% summarize(n_distinct(text))
+seasons %>% gt() %>% tab_header(title = md("Frequency of Distinct Texts in Each Season"))
+texts2 %>% summarize_all(function(x)sum(is.na(x)))
 ```
 
-Your discussion of wrangling section here. Feel encouraged to break up into more than once code chunk and discuss each in turn.
+To begin wrangling, I first used select() to choose the variables that I wanted to keep in my dataset. I kept everything but the variable utterance, as I wasn't really interested in the order that the characters spoke their lines in, and saved this as a new table called friendss. I then grouped the data by speaker and determined how many lines each character had throughout the show, arranging them in descending order in the table called speak. I then took the original friendss data and filtered it to only show the six main cast members and saved it in a table called main_cast. I then took the friendss data again and added an additional column with the ratings converted from decimals to percentages and saved this to a new table called rating_percentages. After this, I noticed that there was a spacing issue in some of the rows of the written_by column, so I used str_replace() to identify these areas and add a space to them. Finally, I noticed that one of the names in the directed_by column had been misspelled, so I used str_replace() to correct the spelling error.
+
+I then computed summary statistics for my numeric variables us_views_millions and imdb_ratings, including the mean, standard deviation, variance, minimum, and maximum for each, and saved them to tables called views_stats and ratings_stats, respectively. I also computed these summary statistics for these variables after grouping by directed_by. I then determined the frequency at each level of each of my categorical variables season, episode, title, directed_by, written_by, air_date, text, speaker, and scene, also saving them into tables. However, these frequencies are not very helpful to analyze the data with, as they're related to the amount of lines found in each episode. Therefore, I decided to group each categorical variable by another categorical variable and take the distinct counts in order to get more informative results. Finally, I determined the number of NAs for each variable by creating my own function, and there is only one present in the speakers table.
 
 
 #### Visualizing
 
 ```{R}
-# your plot 1
+ggplot(data = friendss, aes(x = imdb_rating, y = us_views_millions, color=as.factor(season))) + geom_point() + scale_x_continuous(breaks=seq(6,10,2), limits =c(6,10)) + ggtitle("US Views vs IMDb Rating") + labs(y= "US Views (in millions)", x="IMDb Rating (stars)", color="Season") + geom_smooth(method="lm") + theme_dark()
 ```
 
-Your discussion of plot 1
+This is a scatterplot of the relationship between an episode's IMDb rating and the number of views it got in the US when it aired. The episodes are colored by which season they're from to further distinguish the data. From this plot, it is apparent that there is a positive relationship between IMDb rating and US views, as an episode that has a higher rating tends to have a higher number of views. This seems to be true for all the episodes overall and within each season. The strongest relationship seems to be in season 10, and that is likely due to the series finale bringing in more viewers and higher ratings. The lowest rated episode appears to be from season 4 and the highest rated episode appears to be from either season 5 or 10. The lowest viewed episodes appear to be from season 7 while the highest viewed episodes are from season 2 and 10.
 
 ```{R}
-# your plot 2
+ggplot(friendss, aes(x = directed_by, y = imdb_rating, fill=directed_by)) + geom_bar(stat="summary",fun=mean) + scale_y_continuous(breaks=seq(0,10,1)) +  geom_errorbar(stat="summary", fun.data=mean_se) + ggtitle("Director vs Mean Rating") + labs(y= "IMDb Rating (stars)", x="Director") + theme(axis.text.x = element_text(angle=45, hjust=1), legend.position="none")
 ```
 
-Your discussion of plot 2
+This is bar plot of the relationship between an episode's director (or directors, as Kevin S. Bright and Gary Halvorson both worked on episodes individually and together) and that director's average IMDb rating for episodes. All of the standard error bars are very small, indicating that there is little to no uncertainty/variability in the ratings for each director's episodes. Overall, there seems to not be much difference in the average episode ratings for each director, as they all fall somewhere between 8-9 stars, suggesting that the director of the episode might not play the biggest part in how highly it's rated. While the difference is small, it is still apparent that Joe Regalbuto tends to have the highest rated episodes of the series and Todd Holland appears to have the lowest. 
 
 ```{R}
-# your plot 3
+ggplot(main_cast, aes(x=us_views_millions, fill=speaker)) + geom_density(alpha=.75) + theme(legend.position=c(.9,.8)) + scale_fill_brewer(palette="Set3") + scale_y_continuous(breaks=seq(0,0.12,0.02)) + ggtitle("Main Cast Speaking vs US Views") + labs(y= "Density", x="US Views (in millions)") + geom_rug(color="pink")
 ```
 
-Your discussion of plot 3
+This is a density plot showing the distribution of US views on episodes of Friends. Most episodes tended to get somewhere between 20-25 million US views, but there were some outliers that gained over 50 million (which were likely specials or finales). Which members of the main cast spoke did not really seem to have too much affect on the pattern of distribution of US views, as the shape of each speaker's view distribution looks very similar.
 
 #### Concluding Remarks
 
-If any!
+Since I'm still going through my first run of the series, I'm happy that I was able to incorporate my love for it into my project. It was very interesting learning if there were any patterns present in the show's history and creation that may explain why it is still relevant to this day, almost a decade after the end of its original run. 
 
 
 
